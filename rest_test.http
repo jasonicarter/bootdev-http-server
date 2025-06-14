@@ -1,15 +1,21 @@
 GET https://api.github.com/users/jasonicarter HTTP/1.1
 
 ###
-
-GET https://example.com/topics/1 HTTP/1.1
+GET http://localhost:8080/admin/metrics
 
 ###
-
-POST https://example.com/comments HTTP/1.1
-content-type: application/json
+# Chirp is too long
+POST http://localhost:8080/api/validate_chirp
+Content-Type: application/json
 
 {
-    "name": "sample",
-    "time": "Wed, 21 Oct 2015 18:27:50 GMT"
+  "body": "This is an opinion I need to share with the world is this any longer that it should be? what about now, I'm sure this is waaaaaaaya tooo long for a chirpy to handle isn't"
 }
+
+###
+# Something went wrong
+POST http://localhost:8080/api/validate_chirp
+Content-Type: application/json
+
+{
+  "body": "This is an opinion I need to share with the world"
