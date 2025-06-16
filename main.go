@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 	"sync/atomic"
 )
 
@@ -52,7 +53,7 @@ func validateChirp(w http.ResponseWriter, req *http.Request) {
 	}
 
 	type returnVals struct {
-		Valid bool `json:"valid"`
+		CleanBody string `json:"cleaned_body"`
 	}
 
 	// get json body into struct
@@ -84,7 +85,39 @@ func validateChirp(w http.ResponseWriter, req *http.Request) {
 	chirpLength := len([]rune(params.Body))
 	// validate length of body - len() returns bytes not characters
 	if chirpLength <= 140 {
-		resBody := returnVals{Valid: true}
+
+		chirp := params.Body
+		bannedWords := map[string]bool{
+			"kerfuffle": true,
+			"sharbert":  true,
+			"fornax":    true,
+		}
+		words := strings.Fields(chirp)
+		for _, word := range words {
+			if bannedWords[strings.ToLower(word)] {
+				chirp = strings.ReplaceAll(chirp, word, "****")
+			}
+		}
+
+		/*
+			cleanChirp := make([]string, len(chirp))
+			badWords := []string{"kerfuffle", "sharbert", "fornax"}
+			for _, word := range badWords {
+				if strings.Contains(strings.ToLower(chirp), word) {
+					chirpWords := strings.Split(chirp, " ")
+					for i, w := range chirpWords {
+						if word == strings.ToLower(w) {
+							cleanChirp[i] = "****"
+						} else {
+							cleanChirp[i] = w
+						}
+					}
+					chirp = strings.Join(cleanChirp, " ")
+				}
+			}
+		*/
+
+		resBody := returnVals{CleanBody: strings.Trim(chirp, "")}
 
 		data, err := json.Marshal(resBody)
 		if err != nil {
@@ -92,10 +125,6 @@ func validateChirp(w http.ResponseWriter, req *http.Request) {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-
-		// if data, err := json.Marshal(resBody); err == nil {
-		// 	w.Write([]byte(data))
-		// }
 
 		w.WriteHeader(http.StatusOK)
 		w.Header().Set("Content-Type", "application/json")

@@ -17,5 +17,14 @@ Content-Type: application/json
 POST http://localhost:8080/api/validate_chirp
 Content-Type: application/json
 
-{
+
   "body": "This is an opinion I need to share with the world"
+}
+
+###
+POST http://localhost:8080/api/validate_chirp
+Content-Type:  application/json
+
+{
+  "body": "I really need a kerfuffle to go to bed sooner, Fornax !"
+}
