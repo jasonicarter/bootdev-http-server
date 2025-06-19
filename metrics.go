@@ -3,12 +3,7 @@ package main
 import (
 	"fmt"
 	"net/http"
-	"sync/atomic"
 )
-
-type apiConfig struct {
-	fileserverHits atomic.Int32
-}
 
 func (cfg *apiConfig) getMetrics(w http.ResponseWriter, req *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")

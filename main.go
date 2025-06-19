@@ -1,11 +1,23 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/json"
 	"log"
 	"net/http"
+	"os"
 	"strings"
+	"sync/atomic"
+
+	"github.com/jasonicarter/bootdev-http-server/internal/database"
+	"github.com/joho/godotenv"
+	_ "github.com/lib/pq"
 )
+
+type apiConfig struct {
+	fileserverHits atomic.Int32
+	*database.Queries
+}
 
 var bannedWords = map[string]bool{
 	"kerfuffle": true,
@@ -14,6 +26,16 @@ var bannedWords = map[string]bool{
 }
 
 func main() {
+
+	godotenv.Load()
+
+	dbURL := os.Getenv("DB_URL")
+	db, err := sql.Open("postgres", dbURL)
+	if err != nil {
+		log.Printf("Error connecting to database: %v", err)
+	}
+
+	database.New(db)
 
 	apiCfg := apiConfig{}
 	mux := http.NewServeMux()
