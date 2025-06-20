@@ -8,7 +8,9 @@ import (
 	"os"
 	"strings"
 	"sync/atomic"
+	"time"
 
+	"github.com/google/uuid"
 	"github.com/jasonicarter/bootdev-http-server/internal/database"
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
@@ -16,7 +18,8 @@ import (
 
 type apiConfig struct {
 	fileserverHits atomic.Int32
-	*database.Queries
+	dbQueries      *database.Queries
+	platform       string
 }
 
 var bannedWords = map[string]bool{
@@ -28,33 +31,44 @@ var bannedWords = map[string]bool{
 func main() {
 
 	godotenv.Load()
-
 	dbURL := os.Getenv("DB_URL")
+	env := os.Getenv("PLATFORM")
+
 	db, err := sql.Open("postgres", dbURL)
 	if err != nil {
 		log.Printf("Error connecting to database: %v", err)
+		os.Exit(1)
 	}
 
-	database.New(db)
+	apiCfg := apiConfig{
+		// fileserverHits: // The zero value is zero
+		dbQueries: database.New(db),
+		platform:  env,
+	}
 
-	apiCfg := apiConfig{}
 	mux := http.NewServeMux()
 	mux.Handle("/app/",
 		apiCfg.middlewareMetricsInc(
 			http.StripPrefix("/app", http.FileServer(http.Dir("."))),
 		),
 	)
-	mux.HandleFunc("GET /api/healthz", healthz)
+	mux.HandleFunc("GET /api/healthz", handlerHealthz)
 	mux.HandleFunc("GET /admin/metrics", apiCfg.getMetrics)
 	mux.HandleFunc("POST /admin/reset", apiCfg.resetMetrics)
-	mux.HandleFunc("POST /api/validate_chirp", validateChirp)
+	mux.HandleFunc("POST /api/validate_chirp", handlerValidateChirp)
+	mux.HandleFunc("POST /api/users", apiCfg.handlerAddUsers)
 
 	server := http.Server{
 		Addr:    ":8080",
 		Handler: mux,
 	}
 
-	server.ListenAndServe()
+	// Start things up and exist if it fails
+	err = server.ListenAndServe()
+	if err != nil {
+		log.Printf("Error starting up the server: %v", err)
+		os.Exit(1)
+	}
 
 }
 
@@ -97,13 +111,13 @@ func respondWithJSON(w http.ResponseWriter, httpStatusCode int, payload any) {
 
 }
 
-func healthz(w http.ResponseWriter, req *http.Request) {
+func handlerHealthz(w http.ResponseWriter, req *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("OK"))
 }
 
-func validateChirp(w http.ResponseWriter, req *http.Request) {
+func handlerValidateChirp(w http.ResponseWriter, req *http.Request) {
 
 	type parameters struct {
 		Body string `json:"body"`
@@ -143,5 +157,48 @@ func validateChirp(w http.ResponseWriter, req *http.Request) {
 		respondWithJSON(w, http.StatusOK, errorResponse)
 		return
 	}
+
+}
+
+func (cfg *apiConfig) handlerAddUsers(w http.ResponseWriter, req *http.Request) {
+
+	type parameters struct {
+		Email string `json:"email"`
+	}
+
+	decoder := json.NewDecoder(req.Body)
+	params := parameters{}
+
+	err := decoder.Decode(&params)
+	if err != nil {
+		log.Printf("Error decoding parameters: %s", err)
+		respondWithError(w, http.StatusInternalServerError, "Something went wrong")
+		return
+	}
+
+	// create user
+	user, err := cfg.dbQueries.CreateUser(req.Context(), params.Email)
+	if err != nil {
+		log.Printf("Error creating user: %v", err)
+		respondWithError(w, http.StatusInternalServerError, "Something went wrong")
+	}
+	// log.Printf("%v", user)
+
+	// User struct allows for better control on the keys which database.user defaults
+	type User struct {
+		ID        uuid.UUID `json:"id"`
+		CreatedAt time.Time `json:"created_at"`
+		UpdatedAt time.Time `json:"updated_at"`
+		Email     string    `json:"email"`
+	}
+
+	payload := User{
+		ID:        user.ID,
+		CreatedAt: user.CreatedAt,
+		UpdatedAt: user.UpdatedAt,
+		Email:     user.Email,
+	}
+
+	respondWithJSON(w, http.StatusCreated, payload)
 
 }
