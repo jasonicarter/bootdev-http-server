@@ -8,5 +8,5 @@ values (
 )
 returning *;
 
--- name: ResetUsers :one
+-- name: ResetUsers :exec
 truncate table users;

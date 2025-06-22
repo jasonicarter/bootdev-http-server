@@ -32,16 +32,11 @@ func (q *Queries) CreateUser(ctx context.Context, email string) (User, error) {
 	return i, err
 }
 
-const resetUsers = `-- name: ResetUsers :one
+const resetUsers = `-- name: ResetUsers :exec
 truncate table users
 `
 
-type ResetUsersRow struct {
-}
-
-func (q *Queries) ResetUsers(ctx context.Context) (ResetUsersRow, error) {
-	row := q.db.QueryRowContext(ctx, resetUsers)
-	var i ResetUsersRow
-	err := row.Scan()
-	return i, err
+func (q *Queries) ResetUsers(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, resetUsers)
+	return err
 }

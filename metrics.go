@@ -30,15 +30,17 @@ func (cfg *apiConfig) resetMetrics(w http.ResponseWriter, req *http.Request) {
 	}
 
 	// Reset users
-	r, _ := cfg.dbQueries.ResetUsers(req.Context())
+	err := cfg.dbQueries.ResetUsers(req.Context())
+	if err != nil {
+		// TODO: respond with error
+		log.Printf("Error truncating Users table: %v", err)
+	}
+	err = cfg.dbQueries.ResetChirps(req.Context())
+	if err != nil {
+		log.Printf("Error truncating Chirps table: %v", err)
+	}
 
-	// TODO: err contains "no rows in result set"
-	// if err != nil {
-	// 	log.Printf("Error reseting users: %v", err)
-	// 	respondWithError(w, http.StatusInternalServerError, "Something went wrong")
-	// }
-	log.Printf("Users table truncates: %v", r)
-
+	log.Printf("Tables truncated")
 	w.WriteHeader(http.StatusOK)
 	cfg.fileserverHits.Store(0)
 

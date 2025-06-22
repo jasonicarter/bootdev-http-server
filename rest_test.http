@@ -22,11 +22,12 @@ Content-Type: application/json
 }
 
 ###
-POST http://localhost:8080/api/validate_chirp
+POST http://localhost:8080/api/chirps
 Content-Type:  application/json
 
 {
-  "body": "I really need a kerfuffle to go to bed sooner, Fornax !"
+  "body": "Hello, world!",
+  "user_id": "3b76d233-b14e-4a61-a56d-bfd5204dc7cb"
 }
 
 ###

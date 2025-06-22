@@ -55,7 +55,7 @@ func main() {
 	mux.HandleFunc("GET /api/healthz", handlerHealthz)
 	mux.HandleFunc("GET /admin/metrics", apiCfg.getMetrics)
 	mux.HandleFunc("POST /admin/reset", apiCfg.resetMetrics)
-	mux.HandleFunc("POST /api/validate_chirp", handlerValidateChirp)
+	mux.HandleFunc("POST /api/chirps", apiCfg.handlerAddChirp)
 	mux.HandleFunc("POST /api/users", apiCfg.handlerAddUsers)
 
 	server := http.Server{
@@ -117,10 +117,11 @@ func handlerHealthz(w http.ResponseWriter, req *http.Request) {
 	w.Write([]byte("OK"))
 }
 
-func handlerValidateChirp(w http.ResponseWriter, req *http.Request) {
+func (cfg *apiConfig) handlerAddChirp(w http.ResponseWriter, req *http.Request) {
 
 	type parameters struct {
-		Body string `json:"body"`
+		Body   string `json:"body"`
+		UserID string `json:"user_id"`
 	}
 
 	// get json body into struct
@@ -138,23 +139,55 @@ func handlerValidateChirp(w http.ResponseWriter, req *http.Request) {
 	// handle chirpy - validate length and respond
 	// len() returns bytes not characters
 	chirpLength := len([]rune(params.Body))
-	if chirpLength <= 140 {
 
-		chirpCleaned := replaceProfanity(params.Body, bannedWords)
-		validResponse := struct {
-			CleanBody string `json:"cleaned_body"`
-		}{CleanBody: chirpCleaned}
-
-		respondWithJSON(w, http.StatusOK, validResponse)
-		return
-	}
-
+	// TODO: Consider moving this out into it's own func
 	if chirpLength > 140 {
 		errorResponse := struct {
 			Error string `json:"error"`
 		}{Error: "Chirp is too long"}
 
 		respondWithJSON(w, http.StatusOK, errorResponse)
+		return
+	}
+
+	if chirpLength <= 140 {
+
+		chirpCleaned := replaceProfanity(params.Body, bannedWords)
+		user_id, err := uuid.Parse(params.UserID)
+		if err != nil {
+			log.Printf("Error decoding parameters: %s", err)
+			respondWithError(w, http.StatusInternalServerError, "Something went wrong")
+		}
+		newChirp := database.CreateChirpParams{
+			Body:   chirpCleaned,
+			UserID: user_id,
+		}
+
+		// Save chirp in database
+		createdChirp, err := cfg.dbQueries.CreateChirp(req.Context(), newChirp)
+		if err != nil {
+			log.Printf("Error creating new chirp: %s", err)
+			respondWithError(w, http.StatusInternalServerError, "Something went wrong")
+			return
+		}
+
+		// Respond
+		type JSONResponse struct {
+			ID        uuid.UUID `json:"id"`
+			CreatedAt time.Time `json:"created_at"`
+			UpdatedAt time.Time `json:"updated_at"`
+			Body      string    `json:"body"`
+			UserID    uuid.UUID `json:"user_id"`
+		}
+
+		reqResponse := JSONResponse{
+			ID:        createdChirp.UserID,
+			CreatedAt: createdChirp.CreatedAt,
+			UpdatedAt: createdChirp.UpdatedAt,
+			Body:      createdChirp.Body,
+			UserID:    createdChirp.UserID,
+		}
+		respondWithJSON(w, http.StatusCreated, reqResponse)
 		return
 	}
 
@@ -182,7 +215,6 @@ func (cfg *apiConfig) handlerAddUsers(w http.ResponseWriter, req *http.Request) 
 		log.Printf("Error creating user: %v", err)
 		respondWithError(w, http.StatusInternalServerError, "Something went wrong")
 	}
-	// log.Printf("%v", user)
 
 	// User struct allows for better control on the keys which database.user defaults
 	type User struct {
