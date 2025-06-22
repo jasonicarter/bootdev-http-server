@@ -52,10 +52,12 @@ func main() {
 			http.StripPrefix("/app", http.FileServer(http.Dir("."))),
 		),
 	)
-	mux.HandleFunc("GET /api/healthz", handlerHealthz)
 	mux.HandleFunc("GET /admin/metrics", apiCfg.getMetrics)
 	mux.HandleFunc("POST /admin/reset", apiCfg.resetMetrics)
+
+	mux.HandleFunc("GET /api/healthz", handlerHealthz)
 	mux.HandleFunc("POST /api/chirps", apiCfg.handlerAddChirp)
+	mux.HandleFunc("GET /api/chirps", apiCfg.handlerGetChirps)
 	mux.HandleFunc("POST /api/users", apiCfg.handlerAddUsers)
 
 	server := http.Server{
@@ -232,5 +234,41 @@ func (cfg *apiConfig) handlerAddUsers(w http.ResponseWriter, req *http.Request) 
 	}
 
 	respondWithJSON(w, http.StatusCreated, payload)
+
+}
+
+func (cfg *apiConfig) handlerGetChirps(w http.ResponseWriter, req *http.Request) {
+
+	// Get chirps
+	chirps, err := cfg.dbQueries.AllChirps(req.Context())
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Something went wrong")
+		return
+	}
+
+	// Respond
+	type JSONResponse struct {
+		ID        uuid.UUID `json:"id"`
+		CreatedAt time.Time `json:"created_at"`
+		UpdatedAt time.Time `json:"updated_at"`
+		Body      string    `json:"body"`
+		UserID    uuid.UUID `json:"user_id"`
+	}
+
+	var allChirps = []JSONResponse{}
+	for _, c := range chirps {
+		//add c variables into struct variable
+		//append c to struct variable
+		chirp := JSONResponse{
+			ID:        c.ID,
+			CreatedAt: c.CreatedAt,
+			UpdatedAt: c.UpdatedAt,
+			Body:      c.Body,
+			UserID:    c.UserID,
+		}
+		allChirps = append(allChirps, chirp)
+	}
+
+	respondWithJSON(w, http.StatusOK, allChirps)
 
 }

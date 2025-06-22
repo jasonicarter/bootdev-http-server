@@ -14,3 +14,6 @@ truncate table chirps;
 
 -- name: DeleteChirp :exec
 delete from chirps where id = $1;
+
+-- name: AllChirps :many
+select * from chirps order by created_at asc;
