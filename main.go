@@ -58,6 +58,7 @@ func main() {
 	mux.HandleFunc("GET /api/healthz", handlerHealthz)
 	mux.HandleFunc("POST /api/chirps", apiCfg.handlerAddChirp)
 	mux.HandleFunc("GET /api/chirps", apiCfg.handlerGetChirps)
+	mux.HandleFunc("GET /api/chirps/{chirpID}", apiCfg.handlerGetChirpByID)
 	mux.HandleFunc("POST /api/users", apiCfg.handlerAddUsers)
 
 	server := http.Server{
@@ -183,7 +184,7 @@ func (cfg *apiConfig) handlerAddChirp(w http.ResponseWriter, req *http.Request) 
 		}
 
 		reqResponse := JSONResponse{
-			ID:        createdChirp.UserID,
+			ID:        createdChirp.ID,
 			CreatedAt: createdChirp.CreatedAt,
 			UpdatedAt: createdChirp.UpdatedAt,
 			Body:      createdChirp.Body,
@@ -226,14 +227,14 @@ func (cfg *apiConfig) handlerAddUsers(w http.ResponseWriter, req *http.Request) 
 		Email     string    `json:"email"`
 	}
 
-	payload := User{
+	userCreated := User{
 		ID:        user.ID,
 		CreatedAt: user.CreatedAt,
 		UpdatedAt: user.UpdatedAt,
 		Email:     user.Email,
 	}
 
-	respondWithJSON(w, http.StatusCreated, payload)
+	respondWithJSON(w, http.StatusCreated, userCreated)
 
 }
 
@@ -270,5 +271,48 @@ func (cfg *apiConfig) handlerGetChirps(w http.ResponseWriter, req *http.Request)
 	}
 
 	respondWithJSON(w, http.StatusOK, allChirps)
+
+}
+
+func (cfg *apiConfig) handlerGetChirpByID(w http.ResponseWriter, req *http.Request) {
+
+	chirpId := req.PathValue("chirpID")
+	if len(chirpId) == 0 {
+		//TODO: respond with error
+		return
+	}
+	log.Printf("%v", chirpId)
+
+	id, err := uuid.Parse(chirpId)
+	if err != nil {
+		//TODO: respond with error
+		return
+	}
+
+	chirp, err := cfg.dbQueries.GetChirpByID(req.Context(), id)
+	if err != nil {
+		log.Printf("%v", err)
+		respondWithError(w, http.StatusInternalServerError, "Something went wrong")
+		return
+	}
+
+	// Respond
+	type JSONResponse struct {
+		ID        uuid.UUID `json:"id"`
+		CreatedAt time.Time `json:"created_at"`
+		UpdatedAt time.Time `json:"updated_at"`
+		Body      string    `json:"body"`
+		UserID    uuid.UUID `json:"user_id"`
+	}
+
+	chirpByID := JSONResponse{
+		ID:        chirp.ID,
+		CreatedAt: chirp.CreatedAt,
+		UpdatedAt: chirp.UpdatedAt,
+		Body:      chirp.Body,
+		UserID:    chirp.ID,
+	}
+
+	respondWithJSON(w, http.StatusOK, chirpByID)
 
 }

@@ -40,3 +40,7 @@ Content-Type: application/json
 
 ###
 POST http://localhost:8080/admin/reset
+
+###
+GET http://localhost:8080/api/chirps/3b76d233-b14e-4a61-a56d-bfd5204dc7cb
+Content-Type:  application/json

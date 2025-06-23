@@ -35,10 +35,6 @@ func (cfg *apiConfig) resetMetrics(w http.ResponseWriter, req *http.Request) {
 		// TODO: respond with error
 		log.Printf("Error truncating Users table: %v", err)
 	}
-	err = cfg.dbQueries.ResetChirps(req.Context())
-	if err != nil {
-		log.Printf("Error truncating Chirps table: %v", err)
-	}
 
 	log.Printf("Tables truncated")
 	w.WriteHeader(http.StatusOK)
