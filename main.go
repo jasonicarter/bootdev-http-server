@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jasonicarter/bootdev-http-server/internal/auth"
 	"github.com/jasonicarter/bootdev-http-server/internal/database"
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
@@ -60,6 +61,7 @@ func main() {
 	mux.HandleFunc("GET /api/chirps", apiCfg.handlerGetChirps)
 	mux.HandleFunc("GET /api/chirps/{chirpID}", apiCfg.handlerGetChirpByID)
 	mux.HandleFunc("POST /api/users", apiCfg.handlerAddUsers)
+	mux.HandleFunc("POST /api/login", apiCfg.handlerUserLogin)
 
 	server := http.Server{
 		Addr:    ":8080",
@@ -199,7 +201,8 @@ func (cfg *apiConfig) handlerAddChirp(w http.ResponseWriter, req *http.Request) 
 func (cfg *apiConfig) handlerAddUsers(w http.ResponseWriter, req *http.Request) {
 
 	type parameters struct {
-		Email string `json:"email"`
+		Email    string `json:"email"`
+		Password string `json:"password"`
 	}
 
 	decoder := json.NewDecoder(req.Body)
@@ -212,8 +215,19 @@ func (cfg *apiConfig) handlerAddUsers(w http.ResponseWriter, req *http.Request) 
 		return
 	}
 
+	hashedPassword, err := auth.HashPassword(params.Password)
+	if err != nil {
+		log.Printf("Error hashing password: %v", err)
+		respondWithError(w, http.StatusInternalServerError, "Something went wrong")
+	}
+
+	newUser := database.CreateUserParams{
+		Email:          params.Email,
+		HashedPassword: hashedPassword,
+	}
+
 	// create user
-	user, err := cfg.dbQueries.CreateUser(req.Context(), params.Email)
+	user, err := cfg.dbQueries.CreateUser(req.Context(), newUser)
 	if err != nil {
 		log.Printf("Error creating user: %v", err)
 		respondWithError(w, http.StatusInternalServerError, "Something went wrong")
@@ -314,5 +328,54 @@ func (cfg *apiConfig) handlerGetChirpByID(w http.ResponseWriter, req *http.Reque
 	}
 
 	respondWithJSON(w, http.StatusOK, chirpByID)
+
+}
+
+func (cfg *apiConfig) handlerUserLogin(w http.ResponseWriter, req *http.Request) {
+
+	// TODO: Maybe consolidate this in one place instead of multiple
+	type parameters struct {
+		Email    string `json:"email"`
+		Password string `json:"password"`
+	}
+
+	decoder := json.NewDecoder(req.Body)
+	params := parameters{}
+
+	err := decoder.Decode(&params)
+	if err != nil {
+		log.Printf("Error decoding parameters: %s", err)
+		respondWithError(w, http.StatusInternalServerError, "Something went wrong")
+		return
+	}
+
+	// new query to create
+	user, err := cfg.dbQueries.LoginUser(req.Context(), params.Email)
+	if err != nil {
+		log.Printf("Error decoding parameters: %s", err)
+		respondWithError(w, http.StatusInternalServerError, "Something went wrong")
+		return
+	}
+
+	if auth.CheckPasswordHash(params.Password, user.HashedPassword) != nil {
+		respondWithError(w, http.StatusUnauthorized, "Incorrect email or password")
+		return
+	}
+
+	type JSONResponse struct {
+		ID        uuid.UUID `json:"id"`
+		CreatedAt time.Time `json:"created_at"`
+		UpdatedAt time.Time `json:"updated_at"`
+		Email     string    `json:"email"`
+	}
+
+	loggedInUser := JSONResponse{
+		ID:        user.ID,
+		CreatedAt: user.CreatedAt,
+		UpdatedAt: user.UpdatedAt,
+		Email:     user.Email,
+	}
+
+	respondWithJSON(w, http.StatusOK, loggedInUser)
 
 }
